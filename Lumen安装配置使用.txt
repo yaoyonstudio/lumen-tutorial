@@ -1,0 +1,309 @@
+﻿Lumen安装配置使用
+
+
+一、安装composer
+
+二、安装lumen
+
+composer global require "laravel/lumen-installer=~1.0"
+
+
+三、初始化lumen项目
+
+lumen new lumenDemo
+
+四、全局配置生效
+
+在lumen/bootstrap/app.php中，将以下两行代码的注释标记去掉。
+
+$app->withFacades();
+
+$app->withEloquent();
+
+
+五、数据库配置
+
+重命名或复制lumenDemo项目目录下.env.example文件为.env
+在window下无法直接右键重命名，可以在CMD窗口中操作，执行下面命令：
+
+copy .env.example .env
+
+打开.env文件，按照你当前的系统数据库实际情况配置，如：
+------------------------------------------------------
+APP_ENV=local
+APP_DEBUG=true
+APP_KEY=abcdefghijklmnopqrstuvwxyz123456
+
+DB_CONNECTION=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=lumen
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_DRIVER=memcached
+QUEUE_DRIVER=sync
+------------------------------------------------------
+
+以上APP_KEY是由你自定义随机生成的32位字符串，主要用于后面验证之用
+
+
+六、配置迁移数据库
+这里的“迁移”由Lumen中的Migration概念直译而来，这里是创建一个数据表的配置文件，方便后面迁移布置到数据库中。
+
+步骤如下：
+
+1、为迁移创建数据库模式
+
+php artisan make:migration create_users_table --create=users
+
+执行这条命令后，会在项目目录lumenDemo/database/migrations/ 目录下生成一个php文件，这个文件主要包括两个函数，在up()函数中根据你的需求定义数据库字段。
+
+
+------------------------------------------------------
+<?php
+
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Migrations\Migration;
+
+class CreateUsersTable extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up()
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('username');
+            $table->string('password');
+            $table->string('nickname');
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     *
+     * @return void
+     */
+    public function down()
+    {
+        Schema::drop('users');
+    }
+}
+
+------------------------------------------------------
+
+2、迁移
+
+执行以下命令，创建数据表
+
+php artisan migrate
+
+
+这时候在你的数据库中就有了一张users表，字段为你在上面步骤中定义的字段。
+
+
+七、创建Model
+
+在项目目录lumenDemo/app 目录中创建一个Users.php文件，作相应配置。
+
+------------------------------------------------------
+
+<?php
+
+namespace App;
+
+use Illuminate\Auth\Authenticatable;
+use Laravel\Lumen\Auth\Authorizable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
+use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
+
+class User extends Model implements
+    AuthenticatableContract,
+    AuthorizableContract
+{
+    use Authenticatable, Authorizable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'username', 'nickname',
+    ];
+
+    /**
+     * The attributes excluded from the model's JSON form.
+     *
+     * @var array
+     */
+    protected $hidden = [
+        'password',
+    ];
+}
+
+------------------------------------------------------
+
+八、创建Controller
+
+在项目目录lumenDemo\app\Http\Controllers 目录中创建UsersController.php文件
+------------------------------------------------------
+<?php
+  
+namespace App\Http\Controllers;
+  
+use App\User;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+  
+  
+class UserController extends Controller{
+
+
+}
+------------------------------------------------------
+
+九、定义路由
+
+打开项目目录lumenDemo\app\Http\routes.php文件，定义路由。
+
+这里定义四个路由：
+1、GET类型：返回所有用户信息
+2、GET类型：返回单个指定用户信息，接收用户ID参数
+3、POST类型：创建一个用户
+4、PUT类型：修改指定用户信息，接收用户ID参数
+5、DELETE类型：删除指定用户信息，接收用户参数
+
+------------------------------------------------------
+<?php
+
+$app->get('/', function () use ($app) {
+    return $app->version();
+});
+
+$app->get('api/v1/users','App\Http\Controllers\UserController@index');
+$app->get('api/v1/users/{id}','App\Http\Controllers\UserController@getUsers');
+$app->post('api/v1/users','App\Http\Controllers\UserController@createUsers');
+$app->put('api/v1/users/{id}','App\Http\Controllers\UserController@updateUsers');
+$app->delete('api/v1/users/{id}','App\Http\Controllers\UserController@deleteUsers');
+
+------------------------------------------------------
+
+以上是常规写法，可以使用lumen提供的group进行分组，分组后的路由定义如下：
+
+------------------------------------------------------
+
+$app->get('/', function() use ($app) {
+    return "Lumen RESTful API By CoderExample (http://coderexample.com)";
+});
+
+$app->group(['prefix' => 'api/v1','namespace' => 'App\Http\Controllers'], function($app)
+{
+    $app->get('user','UserController@index');
+  
+    $app->get('user/{id}','UserController@getUser');
+      
+    $app->post('user','UserController@createUser');
+      
+    $app->put('user/{id}','UserController@updateUser');
+      
+    $app->delete('user/{id}','UserController@deleteUser');
+});
+
+------------------------------------------------------
+
+
+十、定义具体实用的Controller功能
+
+打开前面创建的UsersController.php文件，在这里定义实际可用的主体功能。
+
+------------------------------------------------------
+
+<?php
+  
+namespace App\Http\Controllers;
+  
+use App\User;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+  
+  
+class UserController extends Controller{
+
+
+    public function index(){
+  
+        $User  = User::all();
+  
+        return response()->json($User);
+  
+    }
+  
+    public function getUser($id){
+  
+        $User  = User::find($id);
+  
+        return response()->json($User);
+    }
+  
+    public function createUser(Request $request){
+  
+        $User = User::create($request->all());
+  
+        return response()->json($User);
+  
+    }
+  
+    public function deleteUser($id){
+        $User  = User::find($id);
+        $User->delete();
+ 
+        return response()->json('用户已删除');
+    }
+  
+    public function updateUser(Request $request,$id){
+        $User  = User::find($id);
+        $User->username = $request->input('username');
+        $User->password = $request->input('password');
+        $User->nickname = $request->input('nickname');
+        $User->save();
+  
+        return response()->json($User);
+    }
+  
+}
+
+------------------------------------------------------
+
+
+十一、开启服务器，测试功能
+
+新版Lumen取消了serve功能，所以要无法使用php artisan serve来开启服务器功能。
+
+在命令行进入到项目目录lumenDemo\public目录，执行：
+
+php -S localhost:8000
+
+这时会开启一个伺服，端口号8000，伺服目录为lumenDemo\public
+
+
+这样就可以开始测试API测试，可以使用POSTMAN，测试更加方便。
+
+
+GET: http://localhost:8000/api/v1/user
+
+GET: http://localhost:8000/api/v1/user/{id}
+
+POST: http://localhost:8000/api/v1/user
+
+PUT:http://localhost:8000/api/v1/user/{id}
+
+DELETE:http://localhost:8000/api/v1/user/{id}
+
+
